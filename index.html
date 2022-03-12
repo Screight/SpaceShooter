@@ -1,0 +1,219 @@
+<!doctype html>
+<html>
+	<head>
+		<title> Space Shooter</title>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.55.2/phaser.min.js"></script>
+	</head>
+
+	<body>
+		<h1>Space Shooter</h1>
+
+		<script>
+			const SCREEN_WIDTH = 800;
+			const SCREEN_HEIGHT = 600;
+			const PLAYER_WIDTH = 64;
+			const PLAYER_HEIGHT = 72;
+			const PLAYER_STARTING_POSITION_X = PLAYER_WIDTH/2 + 40;
+			const PLAYER_STARTING_POSITION_Y = SCREEN_HEIGHT/2;
+			const OUT_OF_BOUNDS_POSITION = 1500;
+			const SPRITE_DEFAULT_WIDTH = 64;
+			const SPRITE_DEFAULT_HEIGHT = 64;
+
+			const PLAYER_SPEED = 5;
+			const ENEMY_SPEED = -3;
+			let lives = 3;
+			let score = 0;
+			let ovniKillScore = 1;
+			let enemies = [];
+			
+			let previousFrameTime = 0;
+			let deltaTime = 0;
+
+			let blinkCurrentTime = 0;
+			let blinkDuration = 0.5;
+			let hasBlinked = false;
+
+			let blinkText;
+			let livesText;
+			let livesTextString = "Lives: ";
+			let scoreText;
+			let scoreTextString = "Score: ";
+			let titleString = "Space Shooter";
+			let blinkTextString = "Press space to start";
+			
+			let spaceDownFirstTime = false;
+			let spacePressed = false;
+
+			const Menu = Symbol("menu");
+			const Game = Symbol("game");
+			let season = Menu;
+
+			let config = {
+				width: SCREEN_WIDTH,
+				height: SCREEN_HEIGHT,
+				physics:{
+					default:"arcade",
+					arcade:{
+					debug: true
+					}
+				},
+				scene:{
+				preload: preload,
+				create: create,
+				update: update
+				}
+			};
+
+			let game = new Phaser.Game(config);
+
+			function preload(){
+
+				this.load.image("player", "space_ship_64_72.png");
+				this.load.image("background", "space_background.png");
+				this.load.image("ovni", "ovni_64.png");
+				
+				this.load.bitmapFont("font", "pixel_font.png", "pixel_font.xml");
+			}
+
+			function create(){
+			
+				cursor = this.input.keyboard.createCursorKeys();
+				spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+				background = this.add.image(OUT_OF_BOUNDS_POSITION,OUT_OF_BOUNDS_POSITION,"background");
+				player = this.add.image(OUT_OF_BOUNDS_POSITION,OUT_OF_BOUNDS_POSITION,"player");
+				enemies[0] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
+				enemies[1] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
+				enemies[2] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
+
+				title = this.add.bitmapText(150,150, "font", titleString, 40);
+				blinkText = this.add.bitmapText(200,300, "font", blinkTextString, 20);
+				livesText = this.add.bitmapText(50,50, "font", "", 20);
+				scoreText = this.add.bitmapText(50,100, "font", "", 20);
+
+				this.physics.add.existing(player, false);
+				for( i = 0; i < enemies.length; i++){
+					this.physics.add.existing(enemies[i], false);
+					this.physics.add.collider(player, enemies[i], function(player, enemy){
+						HandleEnemyPlayerCollision(enemy);
+					});
+				}
+			}
+			
+			function update(delta){
+				UpdateDeltaTime(delta);
+				UpdateInput(spaceKey);
+				switch(season){
+					case Menu:
+						BlinkText();
+						HandleMenuInput();
+					break;
+					case Game:
+						HandlePlayerMovement();
+						HandleEnemiesMovement();
+					break;
+				}
+
+			}
+			
+			function HandlePlayerMovement(){
+				if(cursor.up.isDown){
+					player.y -= PLAYER_SPEED;
+				}
+				else if(cursor.down.isDown){
+					player.y += PLAYER_SPEED;
+				}
+				if(player.y - PLAYER_HEIGHT/2 < 0){ player.y = PLAYER_HEIGHT/2;}
+				else if(player.y + PLAYER_HEIGHT/2 > SCREEN_HEIGHT){player.y = SCREEN_HEIGHT - PLAYER_HEIGHT/2;}
+			}
+
+			function HandleEnemyPlayerCollision(enemy){
+				let i = ReturnEnemyIndex(enemy);
+				SpawnEnemy(i);
+				SpawnPlayer();
+			}
+		
+			function ReturnEnemyIndex(enemy){
+
+				for(i = 0; i < enemies.length; i++){ if(enemies[i] == enemy) { return i;}}
+			}
+
+			function SpawnEnemy(i){
+				enemies[i].x = SCREEN_WIDTH + SPRITE_DEFAULT_WIDTH;
+				enemies[i].y = 150 + 150 * i;
+			}
+			
+			function SpawnPlayer(){
+				player.x = PLAYER_STARTING_POSITION_X;
+				player.y = PLAYER_STARTING_POSITION_Y;
+			}
+
+			function HandleEnemiesMovement(){
+					
+				for(i = 0; i < enemies.length; i++){
+					enemies[i].x += ENEMY_SPEED;
+					if(enemies[i].x + SPRITE_DEFAULT_WIDTH/2 < 0){ SpawnEnemy(i); } 
+				}
+
+			}
+
+			function EnterGameScene(){
+				SpawnPlayer();
+				for(i = 0; i < enemies.length; i++){SpawnEnemy(i);}
+				background.x = SCREEN_WIDTH/2;
+				background.y = SCREEN_HEIGHT/2;
+				livesText.text = livesTextString + lives.toString();
+				scoreText.text = scoreTextString + score.toString();
+			} 
+			
+			function UpdateDeltaTime(delta){
+				deltaTime = delta - previousFrameTime;
+				previousFrameTime = delta;
+			}
+
+			function BlinkText(){
+				if(blinkCurrentTime < blinkDuration){ blinkCurrentTime += deltaTime/1000;}
+				else {
+					blinkCurrentTime = 0;
+					hasBlinked = !hasBlinked;
+					if(hasBlinked){ blinkText.text = "";}
+					else { blinkText.text = blinkTextString;}
+				}
+			}
+
+			function HandleMenuInput(){
+				if(spacePressed){
+					ExitMenuScene();
+					EnterGameScene();
+				}
+			}
+
+			function ExitMenuScene(){
+				title.text = "";
+				hasBlinked = false;
+				blinkText.text = "";
+				blinkCurrentTime = 0;
+				season = Game;
+			}
+			
+			function EnterMenuScene(){
+				title.text = titleString;
+				blinktext = blinkTextString;
+			}
+
+			function UpdateInput(spaceKey){
+				if(spaceKey.isDown && !spaceDownFirstTime) {
+					spacePressed = true;
+					spaceDownFirstTime = true;
+				}
+				else if (spaceDownFirstTime){
+					spacePressed = false;
+				}
+				if(spaceKey.isUp){
+					spaceDownFirstTime = false;
+				}
+			}
+				
+		</script>
+	</body>
+</html>
