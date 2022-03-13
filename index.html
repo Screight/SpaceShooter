@@ -15,38 +15,68 @@
 			const PLAYER_HEIGHT = 72;
 			const PLAYER_STARTING_POSITION_X = PLAYER_WIDTH/2 + 40;
 			const PLAYER_STARTING_POSITION_Y = SCREEN_HEIGHT/2;
-			const OUT_OF_BOUNDS_POSITION = 1500;
+			const BULLET_OFFSET_X = 40;
+			const BULLET_OFFSET_Y = 0;
+			const OUT_OF_BOUNDS = 1500;
 			const SPRITE_DEFAULT_WIDTH = 64;
 			const SPRITE_DEFAULT_HEIGHT = 64;
 
-			const PLAYER_SPEED = 5;
-			const ENEMY_SPEED = -3;
+			const PLAYER_SPEED = 450;
+			const ENEMY_SPEED = -100;
+			const BULLET_SPEED = 400;
+			const MIN_SPAWN_TIME = 0.2;
+			const MAX_SPAWN_TIME = 1;
+
+			let hasPlayerBeenHit = false;
 			let lives = 3;
 			let score = 0;
-			let ovniKillScore = 1;
+			const OVNI_KILL_SCORE = 1;
 			let enemies = [];
-			
+			let bullets = [];
+			let isBulletFired = [];
+			const MAX_NUMBER_OF_BULLETS = 10;
+			const MAX_NUMBER_OF_ENEMIES = 30;
+
 			let previousFrameTime = 0;
 			let deltaTime = 0;
 
-			let blinkCurrentTime = 0;
-			let blinkDuration = 0.5;
+			let timerCurrentTime = 0;
+			const NEXT_GAME_DURATION = 5;
+			const BLINK_DURATION = 0.5;
 			let hasBlinked = false;
 
-			let blinkText;
-			let livesText;
-			let livesTextString = "Lives: ";
-			let scoreText;
-			let scoreTextString = "Score: ";
-			let titleString = "Space Shooter";
-			let blinkTextString = "Press space to start";
-			
+			let text_1;
+			let text_2;
+
+			const DEFAULT_FONT_SIZE = 20;
+			const TITLE_FONT_SIZE = 40;
+
+			const LIVES_STRING = "Lives: ";
+			const LIVES_STRING_POSITION_X = 50;
+			const LIVES_STRING_POSITION_Y = 50;
+			const SCORE_STRING = "Score: ";
+			const SCORE_STRING_POSITION_X = 50;
+			const SCORE_STRING_POSITION_Y = 100;
+			const FINAL_SCORE_STRING = "Final Score: "
+			const FINAL_SCORE_STRING_POSITION_X = 250;
+			const FINAL_SCORE_STRING_POSITION_Y = 300;
+			const TITLE_STRING = "Space Shooter";
+			const TITLE_STRING_POSITION_X = 150;
+			const TITLE_STRING_POSITION_Y = 150;
+			const GAME_OVER_STRING = "Game Over";
+			const GAME_OVER_STRING_POSITION_X = 200;
+			const GAME_OVER_STRING_POSITION_Y = 200;
+			const BLINK_STRING = "Press space to start";
+			const BLINK_STRING_POSITION_X = 200;
+			const BLINK_STRING_POSITION_Y = 300;
+
 			let spaceDownFirstTime = false;
 			let spacePressed = false;
 
 			const Menu = Symbol("menu");
 			const Game = Symbol("game");
-			let season = Menu;
+			const GameOver = Symbol("gameover");
+			let scene = Menu;
 
 			let config = {
 				width: SCREEN_WIDTH,
@@ -54,7 +84,7 @@
 				physics:{
 					default:"arcade",
 					arcade:{
-					debug: true
+					debug: false
 					}
 				},
 				scene:{
@@ -71,6 +101,7 @@
 				this.load.image("player", "space_ship_64_72.png");
 				this.load.image("background", "space_background.png");
 				this.load.image("ovni", "ovni_64.png");
+				this.load.image("bullet", "bullet.png");
 				
 				this.load.bitmapFont("font", "pixel_font.png", "pixel_font.xml");
 			}
@@ -80,67 +111,142 @@
 				cursor = this.input.keyboard.createCursorKeys();
 				spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-				background = this.add.image(OUT_OF_BOUNDS_POSITION,OUT_OF_BOUNDS_POSITION,"background");
-				player = this.add.image(OUT_OF_BOUNDS_POSITION,OUT_OF_BOUNDS_POSITION,"player");
-				enemies[0] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
-				enemies[1] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
-				enemies[2] = this.add.image(OUT_OF_BOUNDS_POSITION, OUT_OF_BOUNDS_POSITION,"ovni");
+				background = this.add.image(OUT_OF_BOUNDS,OUT_OF_BOUNDS,"background");
+				player = this.add.image(OUT_OF_BOUNDS,OUT_OF_BOUNDS,"player");
+				for(let i = 0; i < MAX_NUMBER_OF_ENEMIES; i++){ enemies[i] = this.add.image(OUT_OF_BOUNDS, OUT_OF_BOUNDS,"ovni");}
+				for(let i = 0; i < MAX_NUMBER_OF_BULLETS; i++){
+					bullets[i] = this.add.image(OUT_OF_BOUNDS, OUT_OF_BOUNDS, "bullet");
+					isBulletFired[i] = false;
+					}
 
-				title = this.add.bitmapText(150,150, "font", titleString, 40);
-				blinkText = this.add.bitmapText(200,300, "font", blinkTextString, 20);
-				livesText = this.add.bitmapText(50,50, "font", "", 20);
-				scoreText = this.add.bitmapText(50,100, "font", "", 20);
+				text_1 = this.add.bitmapText(OUT_OF_BOUNDS, OUT_OF_BOUNDS, "font", "", DEFAULT_FONT_SIZE);
+				text_2 = this.add.bitmapText(OUT_OF_BOUNDS, OUT_OF_BOUNDS, "font", "", DEFAULT_FONT_SIZE);
 
 				this.physics.add.existing(player, false);
-				for( i = 0; i < enemies.length; i++){
+				for(let i = 0; i < enemies.length; i++){
 					this.physics.add.existing(enemies[i], false);
 					this.physics.add.collider(player, enemies[i], function(player, enemy){
 						HandleEnemyPlayerCollision(enemy);
 					});
+					for(let j = 0; j < MAX_NUMBER_OF_BULLETS; j++){
+						this.physics.add.existing(bullets[j], false);
+						this.physics.add.collider(enemies[i], bullets[j], function(enemy, bullet){
+							HandleEnemyBulletCollision(enemy,bullet);
+						});
+					}
 				}
+				EnterMenuScene();
 			}
 			
 			function update(delta){
 				UpdateDeltaTime(delta);
 				UpdateInput(spaceKey);
-				switch(season){
+				ResetParameters();
+				switch(scene){
 					case Menu:
 						BlinkText();
 						HandleMenuInput();
 					break;
 					case Game:
 						HandlePlayerMovement();
-						HandleEnemiesMovement();
+						HandlePlayerFire();
+						HandleBulletMovement();
+						HandleEnemiesMovement(delta);
+					break;
+					case GameOver:
+					Countdown();
 					break;
 				}
 
 			}
+
+			function ResetParameters(){
+				hasPlayerBeenHit = false;
+			}
+
+			function HandlePlayerFire(){
+				if(spacePressed){
+					for(let i = 0; i < MAX_NUMBER_OF_BULLETS; i++){
+						if(!isBulletFired[i]){
+							isBulletFired[i] = true;
+							bullets[i].x = player.x + BULLET_OFFSET_X;
+							bullets[i].y = player.y + BULLET_OFFSET_Y;
+							return ;
+						}
+					}
+				}
+			}
 			
 			function HandlePlayerMovement(){
 				if(cursor.up.isDown){
-					player.y -= PLAYER_SPEED;
+					player.y -= PLAYER_SPEED * deltaTime;
 				}
 				else if(cursor.down.isDown){
-					player.y += PLAYER_SPEED;
+					player.y += PLAYER_SPEED * deltaTime;
 				}
 				if(player.y - PLAYER_HEIGHT/2 < 0){ player.y = PLAYER_HEIGHT/2;}
 				else if(player.y + PLAYER_HEIGHT/2 > SCREEN_HEIGHT){player.y = SCREEN_HEIGHT - PLAYER_HEIGHT/2;}
 			}
 
+			function HandleBulletMovement(){
+				for(let i = 0; i < MAX_NUMBER_OF_BULLETS; i++){
+					if(isBulletFired[i]){
+					bullets[i].x += BULLET_SPEED * deltaTime;
+						if(bullets[i].x > SCREEN_WIDTH){ 
+							isBulletFired[i] = false;
+							bullets[i].x = OUT_OF_BOUNDS;
+							bullets[i].y = OUT_OF_BOUNDS;
+						}
+					}
+				}
+			}
+
 			function HandleEnemyPlayerCollision(enemy){
-				let i = ReturnEnemyIndex(enemy);
-				SpawnEnemy(i);
+				if(scene != Game) { return ;}
+				if(hasPlayerBeenHit) { return ;}
+				hasPlayerBeenHit = true;
+				let enemyIndex = ReturnEnemyIndex(enemy);
+				for(let i = 0; i < enemies.length; i++){ SpawnEnemy(i);}
 				SpawnPlayer();
+				HandlePlayerHealth();
+				ResetBullets();
+			}
+
+			function HandlePlayerHealth(){
+				lives--;
+				text_1.text = LIVES_STRING + lives.toString();
+				if(lives <= 0){
+					scene = GameOver;
+					ExitGameScene();
+					EnterGameOverScene();
+				};
+			}
+
+			function HandleEnemyBulletCollision(enemy,bullet){
+				if(scene != Game){ return ;}
+				let enemyIndex = ReturnEnemyIndex(enemy);
+				let bulletIndex = ReturnBulletIndex(bullet);
+				if(!isBulletFired[bulletIndex]){ return ;}
+				isBulletFired[bulletIndex] = false;
+				bullets[bulletIndex].x = OUT_OF_BOUNDS;
+				bullets[bulletIndex].y = OUT_OF_BOUNDS;
+				SpawnEnemy(enemyIndex);
+				score += OVNI_KILL_SCORE;
+				text_2.text = SCORE_STRING + score.toString();
 			}
 		
 			function ReturnEnemyIndex(enemy){
 
-				for(i = 0; i < enemies.length; i++){ if(enemies[i] == enemy) { return i;}}
+				for(let enemyIndex = 0; enemyIndex < enemies.length; enemyIndex++){ if(enemies[enemyIndex] == enemy) { return enemyIndex;}}
 			}
 
+			function ReturnBulletIndex(bullet){
+				for(bulletIndex = 0; bulletIndex < bullets.length; bulletIndex++){ if(bullets[bulletIndex] == bullet) { return bulletIndex;}}
+			}
+			
 			function SpawnEnemy(i){
-				enemies[i].x = SCREEN_WIDTH + SPRITE_DEFAULT_WIDTH;
-				enemies[i].y = 150 + 150 * i;
+				enemies[i].x = SCREEN_WIDTH - ENEMY_SPEED *(MIN_SPAWN_TIME + MAX_SPAWN_TIME*Math.random());
+				enemies[i].y = SPRITE_DEFAULT_HEIGHT/2 + (SCREEN_HEIGHT - SPRITE_DEFAULT_HEIGHT/2) * Math.random();
 			}
 			
 			function SpawnPlayer(){
@@ -148,13 +254,26 @@
 				player.y = PLAYER_STARTING_POSITION_Y;
 			}
 
-			function HandleEnemiesMovement(){
+			function HandleEnemiesMovement(delta){
 					
-				for(i = 0; i < enemies.length; i++){
-					enemies[i].x += ENEMY_SPEED;
-					if(enemies[i].x + SPRITE_DEFAULT_WIDTH/2 < 0){ SpawnEnemy(i); } 
+				for(let i = 0; i < enemies.length; i++){
+					enemies[i].x += ENEMY_SPEED * deltaTime;
+					if(i == 1){ enemies[i].y = 200 + 100*i + 100 * Math.sin(delta/500);}
+					if(enemies[i].x + SPRITE_DEFAULT_WIDTH/2 < 0){ 
+						HandlePlayerHealth();
+						for(let i = 0; i < enemies.length; i++){
+							SpawnEnemy(i);
+						}
+						ResetBullets();
+					} 
 				}
+			}
 
+			function ResetBullets(){
+				for(let i = 0; i < bullets.length; i++){
+				bullets[i].x = OUT_OF_BOUNDS;
+				bullets[i].y = OUT_OF_BOUNDS;
+				}
 			}
 
 			function EnterGameScene(){
@@ -162,44 +281,97 @@
 				for(i = 0; i < enemies.length; i++){SpawnEnemy(i);}
 				background.x = SCREEN_WIDTH/2;
 				background.y = SCREEN_HEIGHT/2;
-				livesText.text = livesTextString + lives.toString();
-				scoreText.text = scoreTextString + score.toString();
+				lives = 3;
+				score = 0;
+				text_1.text = LIVES_STRING + lives.toString();
+				text_1.fontSize = DEFAULT_FONT_SIZE;
+				text_1.x = LIVES_STRING_POSITION_X;
+				text_1.y = LIVES_STRING_POSITION_Y;
+				text_2.text = SCORE_STRING + score.toString();
+				text_2.x = SCORE_STRING_POSITION_X;
+				text_2.y = SCORE_STRING_POSITION_Y;
 			} 
 			
+			function ExitGameScene(){
+				player.x = OUT_OF_BOUNDS;
+				player.y = OUT_OF_BOUNDS;
+				for(let i = 0; i < enemies.length; i++){
+					enemies[i].x = OUT_OF_BOUNDS;
+					enemies[i].y = OUT_OF_BOUNDS;
+				}
+				for(let i = 0; i < MAX_NUMBER_OF_BULLETS; i++){
+					bullets[i].x = OUT_OF_BOUNDS;
+					bullets[i].y = OUT_OF_BOUNDS;
+				}
+				background.x = OUT_OF_BOUNDS;
+				background.y = OUT_OF_BOUNDS;
+			}
+
+			function EnterGameOverScene(){
+				text_1.text = GAME_OVER_STRING;
+				text_1.x = GAME_OVER_STRING_POSITION_X;
+				text_1.y = GAME_OVER_STRING_POSITION_Y;
+				text_1.align = 1;
+				text_1.fontSize = TITLE_FONT_SIZE;
+				text_2.text = FINAL_SCORE_STRING + score;
+				text_2.x = FINAL_SCORE_STRING_POSITION_X;
+				text_2.y = FINAL_SCORE_STRING_POSITION_Y;
+				
+			}
+
+			function ExitGameOverScene(){}
+
 			function UpdateDeltaTime(delta){
-				deltaTime = delta - previousFrameTime;
+				deltaTime = (delta - previousFrameTime)/1000;
 				previousFrameTime = delta;
 			}
 
 			function BlinkText(){
-				if(blinkCurrentTime < blinkDuration){ blinkCurrentTime += deltaTime/1000;}
+				if(timerCurrentTime < BLINK_DURATION){ timerCurrentTime += deltaTime;}
 				else {
-					blinkCurrentTime = 0;
+					timerCurrentTime = 0;
 					hasBlinked = !hasBlinked;
-					if(hasBlinked){ blinkText.text = "";}
-					else { blinkText.text = blinkTextString;}
+					if(hasBlinked){ text_2.text = "";}
+					else { text_2.text = BLINK_STRING;}
+				}
+			}
+
+			function Countdown(){
+				if(timerCurrentTime < NEXT_GAME_DURATION){ 
+					timerCurrentTime += deltaTime; 
+					text_1.text = GAME_OVER_STRING + " " + (NEXT_GAME_DURATION - timerCurrentTime.toFixed(0)).toString();
+					}
+				else{
+					timerCurrentTime =0;
+					ExitGameOverScene();
+					EnterMenuScene();
+					scene = Menu;
 				}
 			}
 
 			function HandleMenuInput(){
 				if(spacePressed){
 					ExitMenuScene();
+					scene = Game;
 					EnterGameScene();
 				}
 			}
 
 			function ExitMenuScene(){
-				title.text = "";
 				hasBlinked = false;
-				blinkText.text = "";
 				blinkCurrentTime = 0;
-				season = Game;
 			}
 			
 			function EnterMenuScene(){
-				title.text = titleString;
-				blinktext = blinkTextString;
+				text_1.text = TITLE_STRING;
+				text_1.fontSize = TITLE_FONT_SIZE;
+				text_1.x = TITLE_STRING_POSITION_X;
+				text_1.y = TITLE_STRING_POSITION_Y;
+				text_2.text = BLINK_STRING;
+				text_2.x = BLINK_STRING_POSITION_X;
+				text_2.y = BLINK_STRING_POSITION_Y;
 			}
+
 
 			function UpdateInput(spaceKey){
 				if(spaceKey.isDown && !spaceDownFirstTime) {
